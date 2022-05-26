@@ -1,7 +1,6 @@
-
 # 快速上手
 
-以Java SDK为例, 在星火链测试网上部署, 调用, 查询一个Javascript智能合约.
+以Java SDK为例, 在星火链测试网上部署, 调用, 查询一个Javascript、Solidity智能合约.
 
 ## SDK下载
 
@@ -11,11 +10,11 @@
 
 调用JavaSDK接口离线创建一个账户.
 
-```
+```java
 import cn.bif.model.crypto.KeyPairEntity;
 entity = KeyPairEntity.getBidAndKeyPair();                             //离线创建一个新账号
-System.out.printf("public BID %s\n", entity.getEncAddress());          //账户地址, 可以公开
-System.out.printf("private key %s\n", entity.getEncPrivateKey());      //账户私钥, 请妥善保管
+System.out.printf("BID address %s\n", entity.getEncAddress());          //账户地址, 可以公开
+System.out.printf("privatekey %s\n", entity.getEncPrivateKey());      //账户私钥, 请妥善保管
 ```
 
 ## 获取星火令
@@ -26,7 +25,7 @@ System.out.printf("private key %s\n", entity.getEncPrivateKey());      //账户�
 
 通过配置星火链RPC地址连接SDK到星火链, 本次demo里链接到星火链测试网.
 
-```
+```java
 import cn.bif.api.BIFSDK;
 
 public static final String NODE_URL = "http://test.bifcore.bitfactory.cn";  //星火链测试网RPC地址
@@ -36,11 +35,11 @@ public staitc BIFSDK sdk = BIFSDK.getInstance(NODE_URL);
 
 ## 查看账户状态
 
-```
+```java
 //构建查看账户请求
 BIFAccountGetInfoRequest infoReq = new BIFAccountGetInfoRequest();
 //要查看账户的地址
-infoReq.setAddress(publicKey);
+infoReq.setAddress(address);
 
 //发出查询请求
 BIFAccountGetInfoResponse infoRsp = sdk.getBIFAccountService().getAccount(infoReq);
@@ -59,7 +58,7 @@ if (infoRsp.getErrorCode() == 0) {
 
 正常账户查询返回示例:
 
-```
+```json
 {
     "address":"did:bid:efKkF5uKsopAishxkYja4ULRJhrhrJQU",    //账户地址
     "balance":10000000000,                                   //账户余额
@@ -69,122 +68,194 @@ if (infoRsp.getErrorCode() == 0) {
 
 ## 合约部署
 
-* Javascript智能合约代码
+部署合约分为Javascript、solidity智能合约的部署。
 
-    本次demo用的示例Javascript智能合约代码如下
+#### Javascript智能合约代码
 
-    ```
-    "use strict";
+* Javascript智能合约代码如下:
 
-    function queryById(id) {                        //合约内部函数
-        let data = Chain.load(id);
-        return data;
-    }
+  ```js
+  "use strict";
+  
+  function queryById(id) {                        //合约内部函数
+      let data = Chain.load(id);
+      return data;
+  }
+  
+  function query(input) {                         //合约查询入口
+      input = JSON.parse(input);
+      let id = input.id;
+      let object = queryById(id);
+      return object;
+  }
+  
+  function main(input) {                          //合约调用入口
+      input = JSON.parse(input);
+      Chain.store(input.id, input.data);
+  }
+  
+  function init(input) {                          //初始化函数
+      return;
+  }
+  ```
 
-    function query(input) {                         //合约查询入口
-        input = JSON.parse(input);
-        let id = input.id;
-        let object = queryById(id);
-        return object;
-    }
-
-    function main(input) {                          //合约调用入口
-        input = JSON.parse(input);
-        Chain.store(input.id, input.data);
-    }
-
-    function init(input) {                          //初始化函数
-        return;
-    }
-    ```
-
-    该合约实现了一个简单的存储功能, 用户可以调用main接口存储自定义Key-Value信息, 然后通过query接口查询已经存入的Key-Value信息.
+  该合约实现了一个简单的存储功能, 用户可以调用main接口存储自定义Key-Value信息, 然后通过query接口查询已经存入的Key-Value信息.
 
 * 部署合约
 
-    合约编写完毕后, 需要将合约部署到链上, **注意这里需要账户内有足够的XHT**, 部署代码如下:
+  合约编写完毕后, 需要将合约部署到链上, **注意这里需要账户内有足够的XHT**, 部署代码如下:
 
-    ```
-    //部署合约
+  ```java
+  //部署合约
+  
+  //合约代码，注意转义
+  String contractCode = "\"use strict\";function queryById(id) {    let data = Chain.load(id);    return data;}function query(input) {    input = JSON.parse(input);    let id = input.id;    let object = queryById(id);    return object;}function main(input) {    input = JSON.parse(input);    Chain.store(input.id, input.data);}function init(input) {    return;}";
+  
+  BIFContractCreateRequest createCReq = new BIFContractCreateRequest();
+  
+  //创建方地址和私钥
+  createCReq.setSenderAddress(address);
+  createCReq.setPrivateKey(privateKey);
+  
+  //合约初始balance，一般为0
+  createCReq.setInitBalance(0L);
+  
+  //合约代码
+  createCReq.setPayload(contractCode);
+  
+  //标记和type，javascript合约type为0
+  createCReq.setRemarks("create contract");
+  createCReq.setType(0);
+  
+  //交易耗费上限
+  createCReq.setFeeLimit(300000000L);
+  
+  //调用SDK创建该合约
+  BIFContractCreateResponse createCRsp = sdk.getBIFContractService().contractCreate(createCReq);
+  
+  if (createCRsp.getErrorCode() == 0) {
+      System.out.println(JsonUtils.toJSONString(createCRsp.getResult()));
+  } else {
+      System.out.println(JsonUtils.toJSONString(createCRsp));
+  }
+  ```
 
-    //合约代码，注意转义
-    String contractCode = "\"use strict\";function queryById(id) {    let data = Chain.load(id);    return data;}function query(input) {    input = JSON.parse(input);    let id = input.id;    let object = queryById(id);    return object;}function main(input) {    input = JSON.parse(input);    Chain.store(input.id, input.data);}function init(input) {    return;}";
+  如果部署成功, 调用返回里会拿到这个交易的HASH.
 
-    BIFContractCreateRequest createCReq = new BIFContractCreateRequest();
-
-    //创建方地址和私钥
-    createCReq.setSenderAddress(publicKey);
-    createCReq.setPrivateKey(privateKey);
-
-    //合约初始balance，一般为0
-    createCReq.setInitBalance(0L);
-
-    //合约代码
-    createCReq.setPayload(contractCode);
-
-    //标记和type，javascript合约type为0
-    createCReq.setRemarks("create contract");
-    createCReq.setType(0);
-
-    //交易耗费上限
-    createCReq.setFeeLimit(300000000L);
-
-    //调用SDK创建该合约
-    BIFContractCreateResponse createCRsp = sdk.getBIFContractService().contractCreate(createCReq);
-
-    if (createCRsp.getErrorCode() == 0) {
-        System.out.println(JsonUtils.toJSONString(createCRsp.getResult()));
-    } else {
-        System.out.println(createCRsp.getErrorDesc());
-    }
-    ```
-
-    如果部署成功, 调用返回里会拿到这个交易的HASH.
-
-    ```
-    {
-        "hash":"b25567a482e674d79ac5f9b5f6601f27b676dde90a6a56539053ec882a99854f"
-    }
-    ```
+  ```json
+  {
+      "hash":"b25567a482e674d79ac5f9b5f6601f27b676dde90a6a56539053ec882a99854f"
+  }
+  ```
 
 * 交易信息和合约地址查询
 
-    用SDK查询部署合约的交易详细信息, 可以从中获取到创建的合约地址.
+  用SDK查询部署合约的交易详细信息, 可以从中获取到创建的合约地址.
 
-    ```
-    BIFContractGetAddressRequest cAddrReq = new BIFContractGetAddressRequest();
-    cAddrReq.setHash(cTxHash);
+  ```java
+  BIFContractGetAddressRequest cAddrReq = new BIFContractGetAddressRequest();
+  cAddrReq.setHash(cTxHash);
+  
+  BIFContractGetAddressResponse cAddrRsp = sdk.getBIFContractService().getContractAddress(cAddrReq);
+  if (cAddrRsp.getErrorCode() == 0) {
+      System.out.println(JsonUtils.toJSONString(cAddrRsp.getResult()));
+  } else {
+      System.out.println(cAddrRsp.getErrorDesc());
+  }
+  ```
 
-    BIFContractGetAddressResponse cAddrRsp = sdk.getBIFContractService().getContractAddress(cAddrReq);
-    if (cAddrRsp.getErrorCode() == 0) {
-        System.out.println(JsonUtils.toJSONString(cAddrRsp.getResult()));
-    } else {
-        System.out.println(cAddrRsp.getErrorDesc());
+  合约部署信息示例如下:
+
+  ```json
+  {
+      "contract_address_infos":[
+          {
+              "contract_address":"did:bid:efSvDJivc2A4iqurRkUPzmpT5kB3nkNg",
+              "operation_index":0
+          }
+      ]
+  }
+  ```
+
+  did:bid:efSvDJivc2A4iqurRkUPzmpT5kB3nkNg即为刚刚创建的合约链上地址.
+
+
+
+#### Solidity智能合约代码
+
+* Solidity智能合约代码如下:
+
+  ```solidity
+  pragma solidity ^0.4.26;
+  
+  contract demo  {
+  
+    mapping(uint256 => string) private _datas;
+  
+    function queryById(uint256 id) public view returns (string) {                      
+      
+      return _datas[id];
     }
-    ```
-
-    合约部署信息示例如下:
-
-    ```
-    {
-        "contract_address_infos":[
-            {
-                "contract_address":"did:bid:efSvDJivc2A4iqurRkUPzmpT5kB3nkNg",
-                "operation_index":0
-            }
-        ]
+  
+    function setById(uint256 id, string data) public {                      
+      
+      _datas[id] = data;
     }
-    ```
+  
+  }
+  ```
 
-    did:bid:efSvDJivc2A4iqurRkUPzmpT5kB3nkNg即为刚刚创建的合约链上地址.
+  该合约实现了一个简单的存储功能, 用户可以调用setById接口存储自定义Key-Value信息, 然后通过queryById接口查询已经存入的Key-Value信息.
+
+* 部署合约
+
+  合约编写完毕后, 需要将合约部署到链上, **注意这里需要账户内有足够的XHT**, 部署代码如下:
+
+  solidity智能合约和Javascript智能合约的部署，区别在于：
+
+  type的设置：0代表Javascript智能合约，1代表solidity智能合约。
+
+  setPayload时，设置的不是solidity智能合约代码本身，而是对合约代码进行编译之后，得到的bytecode中的object值。可以参考[星火链Solidity编译器](https://bif-doc.readthedocs.io/zh_CN/latest/app/solidity.html#id5)章节。
+
+  ```java
+  //部署合约  -- 参照 Javascript 的代码，下面展示了差异点。
+  
+  //合约代码，注意转义
+  String contractCode = "6080604052348015610.....................47da4090029";
+  
+  ........
+  
+  //type，javascript合约type为0，solidity合约type为1
+  createCReq.setType(1);
+  
+  ........
+  ```
+
+  如果部署成功, 调用返回里会拿到这个交易的HASH.
+
+  ```json
+  {
+      "hash":"7cbc5345f80d250c0086bb04f974c9f648345f3d8d86f074907e07f1cc02615a"
+  }
+  ```
+
+* 交易信息和合约地址查询
+
+  同Javascript。
+
+
+
+
 
 ## 合约调用
+
+#### Javascript智能合约的合约调用:
 
 合约成功部署并且获取到合约地址后, 就可以通过SDK发送交易调用合约接口, 我们存储一个Key-Value对到合约里:
 
 调用合约input如下
 
-```
+```json
 {
     "id":"test",
     "data": "test"
@@ -193,7 +264,7 @@ if (infoRsp.getErrorCode() == 0) {
 
 调用合约代码如下:
 
-```
+```java
 //转义后input
 String input = "{\"id\":\"test\", \"data\": \"test\"}";
 
@@ -225,17 +296,60 @@ if (cIvkRsp.getErrorCode() == 0) {
 
 调用成功后，我们会得到调用交易的HASH：
 
-```
+```json
 {
     "hash":"c79835265e908f7f06d4fc2c61ef3fd046ae5252675e4671271bd921ad8fde89"
 }
 ```
 
+
+
+
+
+#### Solidity智能合约的合约调用:
+
+合约成功部署并且获取到合约地址后, 就可以通过SDK发送交易调用合约接口, 我们存储一个Key-Value对到合约里:
+
+调用合约input如下
+
+```json
+{
+    "id":123,
+    "data": "abc"
+}
+```
+
+调用合约代码如下:
+
+```java
+//合约调用  -- 参照 Javascript 的代码，下面展示了差异点。
+
+//转义后input
+String input = "{\"function\":\"setById(uint256,string)\", \"args\":\"123,'abc'\"}";
+......
+//设置费用上限
+request.setFeeLimit(100000000L);
+request.setGasPrice(10L);
+......
+```
+
+调用成功后，我们会得到调用交易的HASH：
+
+```json
+{
+    "hash":"0606cc9e910028bb5918bcf79934d02c81665c6819d6f5ee51b99f3ce95b5f82"
+}
+```
+
+
+
 ## 查询合约
+
+#### Javascript智能合约的合约查询:
 
 不同于调用合约, 查询合约为只读操作, 因此不需要发出上链交易和耗费gas, 这里我们查询刚刚设置的key, 查询input为:
 
-```
+```json
 {
     "id":"test"
 }
@@ -243,7 +357,7 @@ if (cIvkRsp.getErrorCode() == 0) {
 
 Java查询代码如下:
 
-```
+```java
 BIFContractCallRequest cCallReq = new BIFContractCallRequest();             //查询请求
 
 String callInput = "{\"id\":\"test\"}";                                     //查询input
@@ -262,7 +376,7 @@ if (cCallRsp.getErrorCode() == 0) {
 
 查询的返回如下:
 
-```
+```json
 {
     "query_rets":[
         {
@@ -275,6 +389,45 @@ if (cCallRsp.getErrorCode() == 0) {
     ]
 }
 ```
+
+
+
+#### Solidity智能合约的合约查询:
+
+不同于调用合约, 查询合约为只读操作, 因此不需要发出上链交易和耗费gas, 这里我们查询刚刚设置的key, 查询input为:
+
+```json
+{
+    "id":123
+}
+```
+
+Java查询代码如下:
+
+```java
+//合约调用  -- 参照 Javascript 的代码，下面展示了差异点。
+......
+String callInput = "{\"function\":\"queryById(uint256)\",\"args\":123,\"return\":\"returns(string)\"}";                                     //查询input
+......
+```
+
+查询的返回如下:
+
+```json
+{
+    "query_rets":[
+        {
+            "result":{
+                "data":"[abc]",
+            }
+        }
+    ]
+}
+```
+
+
+
+
 
 ## 接下来
 
